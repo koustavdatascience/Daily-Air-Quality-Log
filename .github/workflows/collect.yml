@@ -1,0 +1,54 @@
+# Daily Air Quality Collection
+#
+# Runs once a day at 12:00 noon IST (06:30 UTC) to collect air quality
+# data from the Open-Meteo API and commit it to data/air_quality.csv.
+# Can also be triggered manually from the Actions tab for testing.
+
+name: Daily Air Quality Collection
+
+on:
+  schedule:
+    - cron: '30 6 * * *'   # 06:30 UTC = 12:00 noon IST (UTC+5:30)
+  workflow_dispatch:         # Adds a "Run workflow" button on the Actions page
+
+# Least-privilege: the workflow only needs to push commits to the repo
+permissions:
+  contents: write
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # 1. Download the repo onto the runner (also sets up git credentials for pushing)
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. Install Python 3.12 (pinned for predictability)
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # 3. Call the Open-Meteo API and append a row to the CSV
+      #    Fails loudly (exit 1) if the API is down or returns no data
+      - name: Collect today's air quality data
+        run: python scripts/collect.py
+
+      # 4. Validate the full CSV before committing (catches bad data before it lands in the repo)
+      #    Fails loudly (exit 1) if any check fails, stopping the commit step below
+      - name: Validate CSV
+        run: python scripts/validate_csv.py data/air_quality.csv
+
+      # 5. Commit and push the new row
+      #    The author email uses GitHub's noreply format constructed from
+      #    context variables, so commits count toward the contribution graph.
+      #    The "|| echo" handles the case where today was already collected
+      #    (the script skipped, nothing changed, nothing to commit).
+      - name: Commit and push
+        run: |
+          git config user.email "${{ github.repository_owner_id }}+${{ github.repository_owner }}@users.noreply.github.com"
+          git config user.name "${{ github.repository_owner }}"
+          git add data/air_quality.csv
+          git commit -m "data: $(date -u +%Y-%m-%d)" || echo "No changes to commit (already collected today)"
+          git push

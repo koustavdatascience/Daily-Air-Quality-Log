@@ -1,0 +1,10 @@
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Kiro spec files (working documents, not part of the public project)
+.kiro/
